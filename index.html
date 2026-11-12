@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สมุดอวยพรวันวิวาห์</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #f4f1ea;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .book-container {
+            display: flex;
+            background: #fff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            border-radius: 8px;
+            overflow: hidden;
+            width: 800px;
+            height: 500px;
+        }
+        .pg {
+            flex: 1;
+            padding: 40px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            border-right: 1px solid #eee;
+        }
+        .pg.right { border-right: none; }
+        .cv-names { font-size: 24px; font-weight: 600; color: #555; margin: 15px 0; }
+        .cv-names .amp { margin: 0 10px; color: #c5a059; }
+        .wtext { font-size: 18px; line-height: 1.6; color: #333; margin: 20px 0; font-style: italic; }
+        .wauthor { font-weight: 600; color: #c5a059; margin-top: 10px; }
+        .nav-buttons {
+            position: absolute;
+            bottom: 20px;
+            display: flex;
+            gap: 15px;
+        }
+        button {
+            padding: 8px 20px;
+            background: #c5a059;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Sarabun', sans-serif;
+        }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+    <div class="book-container" id="bookSpread">
+        <!-- หน้าหนังสือจะถูกเรนเดอร์ตรงนี้ผ่าน JavaScript -->
+    </div>
+
+    <div class="nav-buttons">
+        <button id="prevBtn" onclick="changePage(-1)" disabled>ก่อนหน้า</button>
+        <span id="pageIndicator" style="align-self: center; font-size: 14px; color: #666;"></span>
+        <button id="nextBtn" onclick="changePage(1)">ถัดไป</button>
+    </div>
+
+<script>
+    // ตั้งค่าข้อมูลคู่บ่าวสาวและลิงก์ Google Sheets (CSV Export Link)
+    const S = {
+        cfg: {
+            bride: "พลอย",
+            groom: "ภูมิ",
+            date: "12 พฤศจิกายน 2026",
+            venue: "โรงแรมโอเรียนเต็ล กรุงเทพฯ"
+        },
+        wishes: []
+    };
+
+    let currentPage = 0;
+    let pagesData = [];
+
+    // แทนที่ลิงก์ด้านล่างด้วยลิงก์ CSV จาก Google Sheets ของคุณ
+    // วิธีเอาลิงก์: ไปที่ Google Sheets -> แชร์แบบสาธารณะ (Anyone with the link can view) -> ไฟล์ -> แชร์ -> เผยแพร่ทางเว็บ (Publish to web) -> เลือกรูปแบบเป็น CSV
+    const SHEET_CSV_URL = 'ใส่_Link_CSV_จาก_Google_Sheets_ที่นี่';
+
+    async function loadGoogleSheetData() {
+        if (!SHEET_CSV_URL.includes('http')) {
+            // ใช้ข้อมูลตัวอย่างกรณีที่ยังไม่ได้ใส่ลิงก์
+            S.wishes = [
+                { name: "คุณสมชาย", relation: "เพื่อนร่วมงาน", message: "ขอให้มีความสุขมากๆ ครับ", photo: "" },
+                { name: "คุณหญิง", relation: "เพื่อนสนิท", message: "Congratulations นะจ๊ะ เหมาะสมกันมากๆ", photo: "" }
+            ];
+            initBook();
+            return;
+        }
+
+        try {
+            const response = await fetch(SHEET_CSV_URL);
+            const data = await response.text();
+            parseCSV(data);
+            initBook();
+        } catch (error) {
+            console.error("ไม่สามารถโหลดข้อมูลจาก Google Sheets ได้:", error);
+        }
+    }
+
+    function parseCSV(text) {
+        const rows = text.split('\n').map(row => row.split(','));
+        // สมมติโครงสร้าง Columns ใน Sheet: [ชื่อ, ความสัมพันธ์, ข้อความอวยพร, ลิงก์รูปภาพ]
+        // เริ่มจากแถวที่ 1 (ข้ามหัวตารางแถวที่ 0)
+        for (let i = 1; i < rows.length; i++) {
+            const r = rows[i];
+            if (r.length >= 3 && r[0].trim() !== "") {
+                S.wishes.push({
+                    name: r[0].replace(/"/g, '').trim(),
+                    relation: r[1] ? r[1].replace(/"/g, '').trim() : '',
+                    message: r[2] ? r[2].replace(/"/g, '').trim() : '',
+                    photo: r[3] ? r[3].replace(/"/g, '').trim() : ''
+                });
+            }
+        }
+    }
+
+    function buildPages() {
+        let out = [{ t: 'cover', n: S.wishes.length }];
+        S.wishes.forEach((w, i) => { out.push({ t: 'wish', w: w, i: i + 1 }); });
+        out.push({ t: 'end', n: S.wishes.length });
+        return out;
+    }
+
+    function renderSpread() {
+        const container = document.getElementById('bookSpread');
+        container.innerHTML = '';
+
+        const p = pagesData[currentPage];
+        let L = document.createElement('article');
+        L.className = 'pg left';
+        let R = document.createElement('article');
+        R.className = 'pg right';
+
+        if (p.t === 'cover') {
+            L.innerHTML = `<h2>สมุดอวยพร</h2><p style="color:#888;">Wedding Wish Book</p>`;
+            R.innerHTML = `
+                <p>ยินดีต้อนรับสู่</p>
+                <div class="cv-names"><span>${S.cfg.bride}</span><span class="amp">&</span><span>${S.cfg.groom}</span></div>
+                <p>${S.cfg.date}</p>
+                <p style="font-size:14px; color:#777;">${S.cfg.venue}</p>
+            `;
+        } else if (p.t === 'end') {
+            L.innerHTML = `<h3>ด้วยรักและขอบคุณ</h3>`;
+            R.innerHTML = `
+                <div class="cv-names"><span>${S.cfg.bride}</span><span class="amp">&</span><span>${S.cfg.groom}</span></div>
+                <p>ขอบคุณทุกคำอวยพรจากแขกผู้มีเกียรติทุกท่าน</p>
